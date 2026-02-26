@@ -13,6 +13,8 @@ from extractor.batch import process_batch
 from extractor.report_html import write_report_html
 from extractor.serialization import utc_now_iso8601
 
+SUPPORTED_FORMATS = ["png", "jpg", "jpeg", "webp"]
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -42,6 +44,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
+
+def _build_payload(
+    input_info: dict,
+    results: list[dict],
+    errors: list[dict],
+    discovered: int,
+    processed_ok: int,
+    failed: int,
+    skipped_unsupported: int,
+) -> dict:
+    return {
+        "tool_version": __version__,
+        "run_at": utc_now_iso8601(),
+        "input": input_info,
+        "totals": {
+            "discovered": discovered,
+            "processed_ok": processed_ok,
+            "failed": failed,
+            "skipped_unsupported": skipped_unsupported,
+        },
+        "results": results,
+        "errors": errors,
+    }
+
+
+def _print_summary(discovered: int, processed_ok: int, failed: int, skipped_unsupported: int) -> None:
+    print(
+        "Summary: discovered={discovered} processed_ok={ok} failed={failed} skipped_unsupported={skipped}".format(
+            discovered=discovered,
+            ok=processed_ok,
+            failed=failed,
+            skipped=skipped_unsupported,
+        )
+    )
 
 
 def _maybe_relativize_paths(payload: dict, input_path: Path) -> None:
@@ -78,23 +115,19 @@ def run_extract(args: argparse.Namespace) -> int:
         print(f"Unexpected runtime error: {exc}", file=sys.stderr)
         return 1
 
-    payload = {
-        "tool_version": __version__,
-        "run_at": utc_now_iso8601(),
-        "input": {
+    payload = _build_payload(
+        input_info={
             "path": str(input_path),
             "recursive": bool(args.recursive),
-            "formats": ["png", "jpg", "jpeg", "webp"],
+            "formats": SUPPORTED_FORMATS,
         },
-        "totals": {
-            "discovered": totals.discovered,
-            "processed_ok": totals.processed_ok,
-            "failed": totals.failed,
-            "skipped_unsupported": totals.skipped_unsupported,
-        },
-        "results": results,
-        "errors": errors,
-    }
+        results=results,
+        errors=errors,
+        discovered=totals.discovered,
+        processed_ok=totals.processed_ok,
+        failed=totals.failed,
+        skipped_unsupported=totals.skipped_unsupported,
+    )
 
     if args.relative_paths:
         _maybe_relativize_paths(payload, input_path=input_path)
@@ -105,13 +138,11 @@ def run_extract(args: argparse.Namespace) -> int:
 
     print("Extraction complete")
     print(f"Output: {output_path}")
-    print(
-        "Summary: discovered={discovered} processed_ok={ok} failed={failed} skipped_unsupported={skipped}".format(
-            discovered=totals.discovered,
-            ok=totals.processed_ok,
-            failed=totals.failed,
-            skipped=totals.skipped_unsupported,
-        )
+    _print_summary(
+        discovered=totals.discovered,
+        processed_ok=totals.processed_ok,
+        failed=totals.failed,
+        skipped_unsupported=totals.skipped_unsupported,
     )
 
     if totals.processed_ok == 0:
@@ -176,23 +207,19 @@ def _run_dragdrop_mode(paths: list[str]) -> int:
     if output_path is None:
         print("Error: no writable output directory found for drag-and-drop mode.", file=sys.stderr)
         return 1
-    payload = {
-        "tool_version": __version__,
-        "run_at": utc_now_iso8601(),
-        "input": {
+    payload = _build_payload(
+        input_info={
             "paths": paths,
             "recursive": False,
-            "formats": ["png", "jpg", "jpeg", "webp"],
+            "formats": SUPPORTED_FORMATS,
         },
-        "totals": {
-            "discovered": discovered,
-            "processed_ok": processed_ok,
-            "failed": failed,
-            "skipped_unsupported": skipped_unsupported,
-        },
-        "results": merged_results,
-        "errors": merged_errors,
-    }
+        results=merged_results,
+        errors=merged_errors,
+        discovered=discovered,
+        processed_ok=processed_ok,
+        failed=failed,
+        skipped_unsupported=skipped_unsupported,
+    )
 
     try:
         with output_path.open("w", encoding="utf-8") as f:
@@ -212,13 +239,11 @@ def _run_dragdrop_mode(paths: list[str]) -> int:
     print(f"JSON Output: {output_path}")
     if html_path is not None:
         print(f"HTML Output: {html_path}")
-    print(
-        "Summary: discovered={discovered} processed_ok={ok} failed={failed} skipped_unsupported={skipped}".format(
-            discovered=discovered,
-            ok=processed_ok,
-            failed=failed,
-            skipped=skipped_unsupported,
-        )
+    _print_summary(
+        discovered=discovered,
+        processed_ok=processed_ok,
+        failed=failed,
+        skipped_unsupported=skipped_unsupported,
     )
     if html_path is not None:
         try:
