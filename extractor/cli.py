@@ -21,6 +21,11 @@ def build_parser() -> argparse.ArgumentParser:
         prog="comfy-meta",
         description="Extract EXIF and ComfyUI metadata from images.",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"comfy-meta {__version__}",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
